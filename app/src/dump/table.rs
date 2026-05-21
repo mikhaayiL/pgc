@@ -344,7 +344,10 @@ impl Table {
                 c.relname as raw_table_name,
                 quote_ident(a.attname) as column_name,
                 a.attnum::int4 as ordinal_position,
-                pg_get_expr(ad.adbin, ad.adrelid) as column_default,
+                CASE
+                    WHEN a.attgenerated <> '' THEN NULL
+                    ELSE pg_get_expr(ad.adbin, ad.adrelid)
+                END as column_default,pg_get_expr(ad.adbin, ad.adrelid) as column_default,
                 CASE
                     WHEN a.attnotnull OR (t.typtype = 'd' AND t.typnotnull) THEN 'NO'
                     ELSE 'YES'
