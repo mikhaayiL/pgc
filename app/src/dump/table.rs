@@ -347,7 +347,7 @@ impl Table {
                 CASE
                     WHEN a.attgenerated <> '' THEN NULL
                     ELSE pg_get_expr(ad.adbin, ad.adrelid)
-                END as column_default,pg_get_expr(ad.adbin, ad.adrelid) as column_default,
+                END as column_default,
                 CASE
                     WHEN a.attnotnull OR (t.typtype = 'd' AND t.typnotnull) THEN 'NO'
                     ELSE 'YES'

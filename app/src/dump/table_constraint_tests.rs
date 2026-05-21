@@ -1662,3 +1662,45 @@ fn test_auto_not_null_column_non_not_null_returns_none() {
     c.constraint_type = "CHECK".to_string();
     assert_eq!(c.auto_not_null_column("users"), None);
 }
+
+#[test]
+fn test_auto_not_null_column_preserves_case_for_quoted_columns() {
+    // Quoted "A" and "a" are distinct columns in PostgreSQL; their
+    // auto-generated NOT NULL names must NOT be conflated.
+    //
+    // The `name` field arrives from `quote_ident(conname)`, so a constraint
+    // whose stored bytes contain uppercase characters is delivered to us
+    // quoted (e.g. `"t_A_not_null"`); the column in the definition string
+    // arrives quoted too. Lowercase-only names come without quotes.
+    let c_upper = nn_constraint("\"t_A_not_null\"", "\"A\"");
+    assert_eq!(c_upper.auto_not_null_column("t"), Some("A".to_string()));
+
+    let c_lower = nn_constraint("t_a_not_null", "a");
+    assert_eq!(c_lower.auto_not_null_column("t"), Some("a".to_string()));
+
+    // A lowercase auto-name must not match a quoted uppercase column.
+    let c_mismatch = nn_constraint("t_a_not_null", "\"A\"");
+    assert_eq!(c_mismatch.auto_not_null_column("t"), None);
+}
+
+#[test]
+fn test_auto_not_null_column_truncated_to_63_bytes() {
+    // Build a base name longer than PG's 63-byte limit so the recorded
+    // constraint name is a truncated prefix.
+    let table = "a".repeat(50);
+    let column = "b".repeat(50);
+    let full_base = format!("{}_{}_not_null", table, column);
+    assert!(full_base.len() > 63);
+
+    // PG truncates to 63 bytes — emulate that.
+    let truncated: String = full_base.chars().take(63).collect();
+    let c = nn_constraint(&truncated, &column);
+    assert_eq!(c.auto_not_null_column(&table), Some(column.clone()));
+
+    // Truncated + numeric collision suffix.
+    let mut with_suffix: String = full_base.chars().take(61).collect();
+    with_suffix.push_str("42");
+    assert_eq!(with_suffix.len(), 63);
+    let c = nn_constraint(&with_suffix, &column);
+    assert_eq!(c.auto_not_null_column(&table), Some(column));
+}
